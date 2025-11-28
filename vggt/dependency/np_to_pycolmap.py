@@ -104,11 +104,11 @@ def batch_np_matrix_to_pycolmap(
         # set image
         R = extrinsics[fidx][:3, :3]
         t = extrinsics[fidx][:3, 3]
-        qvec = rotmat2qvec(R)
 
         image = pycolmap.Image(
-            image_id=fidx + 1, name=f"image_{fidx + 1}", camera_id=camera.camera_id, qvec=qvec, tvec=t
+            image_id=fidx + 1, name=f"image_{fidx + 1}", camera_id=camera.camera_id
         )
+        _set_image_pose(image, R, t)
 
         points2D_list = []
 
@@ -252,11 +252,11 @@ def batch_np_matrix_to_pycolmap_wo_track(
         # set image
         R = extrinsics[fidx][:3, :3]
         t = extrinsics[fidx][:3, 3]
-        qvec = rotmat2qvec(R)
 
         image = pycolmap.Image(
-            image_id=fidx + 1, name=f"image_{fidx + 1}", camera_id=camera.camera_id, qvec=qvec, tvec=t
+            image_id=fidx + 1, name=f"image_{fidx + 1}", camera_id=camera.camera_id
         )
+        _set_image_pose(image, R, t)
 
         points2D_list = []
 
@@ -319,3 +319,34 @@ def _build_pycolmap_intri(fidx, intrinsics, camera_type, extra_params=None):
         raise ValueError(f"Camera type {camera_type} is not supported yet")
 
     return pycolmap_intri
+
+
+def _set_image_pose(image, R, t):
+    """
+    Set pose on a pycolmap.Image across API changes.
+    Tries cam_from_world setter first, then qvec/tvec attributes.
+    """
+    cam_from_world = pycolmap.Rigid3d(pycolmap.Rotation3d(R), t)
+
+    if hasattr(image, "set_cam_from_world"):
+        image.set_cam_from_world(cam_from_world)
+        return
+
+    # Some versions expose cam_from_world as writable property
+    if "cam_from_world" in dir(image):
+        try:
+            image.cam_from_world = cam_from_world
+            return
+        except Exception:
+            pass
+
+    qvec = rotmat2qvec(R)
+    if hasattr(image, "qvec"):
+        try:
+            image.qvec = qvec
+            image.tvec = t
+            return
+        except Exception:
+            pass
+
+    raise AttributeError("pycolmap.Image pose setters are not available in this version.")
