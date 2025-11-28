@@ -11,6 +11,7 @@ import math
 import open3d as o3d
 from tqdm import tqdm
 from typing import Tuple
+import warnings
 
 def write_evaluation_results(target_dir: str, images_count: int, auc_results: dict, pcd_results: dict, inference_time_s: float, peak_mem_mb: float) -> None:
     result_file = os.path.join(target_dir, "eval_results.txt")
@@ -52,6 +53,10 @@ def evaluate_pcd(
         mask_gt = (point3D_ids_gt >= 0) & (images_gt_updated[idx].xys[:, 0] >= 0) & (images_gt_updated[idx].xys[:, 1] >= 0) & \
                     (images_gt_updated[idx].xys[:, 0] < original_coords[k, -2].item()) & (images_gt_updated[idx].xys[:, 1] < original_coords[k, -1].item())
 
+        if not np.any(mask_gt):
+            warnings.warn(f"No valid GT points for frame {idx}; skipping")
+            continue
+
         xys_gt = images_gt_updated[idx].xys[mask_gt]
         pcd_rgb_gt = np.stack([pcd_gt[id].rgb for id in point3D_ids_gt[mask_gt]], axis=0)
         pcd_xyz_gt = np.stack([pcd_gt[id].xyz for id in point3D_ids_gt[mask_gt]], axis=0)
@@ -66,6 +71,10 @@ def evaluate_pcd(
         xys_gt = xys_gt[mask_distance]
         pcd_xyz_gt = pcd_xyz_gt[mask_distance]
         pcd_rgb_gt = pcd_rgb_gt[mask_distance]
+
+        if pcd_xyz_gt.shape[0] == 0:
+            warnings.warn(f"All GT points filtered out by distance for frame {idx}; skipping")
+            continue
 
         # transform xys_gt to the coordinate on points_3d, which is (N, H, W, 3)
         xys_gt_scaled = np.zeros_like(xys_gt)
@@ -87,10 +96,17 @@ def evaluate_pcd(
 
         conf_mask = pcd_conf_sampled > conf_thresh
 
+        if not np.any(conf_mask):
+            warnings.warn(f"No points pass confidence threshold for frame {idx}; skipping")
+            continue
+
         pcd_xyz_gt_list.append(pcd_xyz_gt[conf_mask])
         pcd_xyz_sampled_list.append(pcd_xyz_sampled[conf_mask])
         pcd_rgb_gt_list.append(pcd_rgb_gt[conf_mask])
         pcd_rgb_sampled_list.append(pcd_rgb_sampled[conf_mask])
+
+    if len(pcd_xyz_gt_list) == 0:
+        raise ValueError("No valid points found across all frames after filtering; cannot evaluate point cloud metrics.")
 
     pcd_xyz_gt_array = np.concatenate(pcd_xyz_gt_list, axis=0)
     pcd_xyz_sampled_array = np.concatenate(pcd_xyz_sampled_list, axis=0)
