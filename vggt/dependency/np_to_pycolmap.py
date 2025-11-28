@@ -6,6 +6,7 @@
 
 import numpy as np
 import pycolmap
+from utils.colmap import rotmat2qvec
 from .projection import project_3D_points_np
 
 
@@ -101,12 +102,12 @@ def batch_np_matrix_to_pycolmap(
             reconstruction.add_camera(camera)
 
         # set image
-        cam_from_world = pycolmap.Rigid3d(
-            pycolmap.Rotation3d(extrinsics[fidx][:3, :3]), extrinsics[fidx][:3, 3]
-        )  # Rot and Trans
+        R = extrinsics[fidx][:3, :3]
+        t = extrinsics[fidx][:3, 3]
+        qvec = rotmat2qvec(R)
 
         image = pycolmap.Image(
-            image_id=fidx + 1, name=f"image_{fidx + 1}", camera_id=camera.camera_id, cam_from_world=cam_from_world
+            image_id=fidx + 1, name=f"image_{fidx + 1}", camera_id=camera.camera_id, qvec=qvec, tvec=t
         )
 
         points2D_list = []
@@ -249,12 +250,12 @@ def batch_np_matrix_to_pycolmap_wo_track(
             reconstruction.add_camera(camera)
 
         # set image
-        cam_from_world = pycolmap.Rigid3d(
-            pycolmap.Rotation3d(extrinsics[fidx][:3, :3]), extrinsics[fidx][:3, 3]
-        )  # Rot and Trans
+        R = extrinsics[fidx][:3, :3]
+        t = extrinsics[fidx][:3, 3]
+        qvec = rotmat2qvec(R)
 
         image = pycolmap.Image(
-            image_id=fidx + 1, name=f"image_{fidx + 1}", camera_id=camera.camera_id, cam_from_world=cam_from_world
+            image_id=fidx + 1, name=f"image_{fidx + 1}", camera_id=camera.camera_id, qvec=qvec, tvec=t
         )
 
         points2D_list = []
